@@ -71,8 +71,8 @@ function animate() {
   if (keys["a"]) car.position.x -= 0.1;
   if (keys["d"]) car.position.x += 0.1;
 
-  car.position.z += speed;
-  camera.position.z = car.position.z - 10;
+car.position.z -= speed;
+camera.position.z = car.position.z + 10;
 
   document.getElementById("speed").textContent =
     Math.abs(Math.round(speed * 120));
