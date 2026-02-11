@@ -1,8 +1,4 @@
-// =====================
-// BASIC SETUP
-// =====================
-import * as THREE from "three";
-
+// ===== BASIC SETUP =====
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
@@ -17,175 +13,123 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// =====================
-// LIGHTING
-// =====================
+// ===== LIGHTING =====
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-
-const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-sun.position.set(50, 100, 50);
+const sun = new THREE.DirectionalLight(0xffffff, 0.6);
+sun.position.set(5, 10, 5);
 scene.add(sun);
 
-// =====================
-// ROAD
-// =====================
+// ===== ROAD =====
 const road = new THREE.Mesh(
-  new THREE.PlaneGeometry(20, 1000),
-  new THREE.MeshStandardMaterial({ color: 0x333333 })
+  new THREE.BoxGeometry(12, 0.1, 500),
+  new THREE.MeshStandardMaterial({ color: 0x222222 })
 );
-road.rotation.x = -Math.PI / 2;
+road.rotation.y = 0; // 🔥 FIXED DIRECTION
 scene.add(road);
 
-// Lane lines
-for (let i = -500; i < 500; i += 20) {
+// ===== LANE LINES =====
+for (let i = -250; i < 250; i += 10) {
   const line = new THREE.Mesh(
-    new THREE.BoxGeometry(0.2, 0.01, 5),
+    new THREE.BoxGeometry(0.1, 0.01, 5),
     new THREE.MeshStandardMaterial({ color: 0xffffff })
   );
-  line.position.set(0, 0.01, i);
+  line.position.set(0, 0.06, i);
   scene.add(line);
 }
 
-// =====================
-// PLAYER VEHICLE
-// =====================
+// ===== PLAYER (RED CAR) =====
 const player = new THREE.Mesh(
-  new THREE.BoxGeometry(1.8, 1, 4),
-  new THREE.MeshStandardMaterial({ color: 0x0077ff })
+  new THREE.BoxGeometry(1.8, 1, 3),
+  new THREE.MeshStandardMaterial({ color: 0xff0000 })
 );
-player.position.set(-2, 0.5, 10);
+player.position.set(2, 0.55, 0); // RIGHT LANE
 scene.add(player);
 
-camera.position.set(0, 6, 15);
+// ===== CAMERA =====
+camera.position.set(0, 6, -10);
 camera.lookAt(player.position);
 
-// =====================
-// CONTROLS
-// =====================
-const keys = {};
-window.addEventListener("keydown", e => keys[e.key] = true);
-window.addEventListener("keyup", e => keys[e.key] = false);
-
-let speed = 0;
-const maxSpeed = 0.35;
-
-// =====================
-// TRAFFIC VEHICLES
-// =====================
+// ===== TRAFFIC (BLUE CARS) =====
 const traffic = [];
-const vehicleColors = [0xff0000, 0xffff00, 0xffffff, 0x00ff00];
 
-function spawnTraffic(z) {
+function spawnTraffic() {
   const car = new THREE.Mesh(
-    new THREE.BoxGeometry(1.8, 1, 4),
-    new THREE.MeshStandardMaterial({
-      color: vehicleColors[Math.floor(Math.random() * vehicleColors.length)]
-    })
+    new THREE.BoxGeometry(1.8, 1, 3),
+    new THREE.MeshStandardMaterial({ color: 0x0044ff })
   );
 
-  car.position.set(2, 0.5, z);
+  car.position.set(-2, 0.55, player.position.z + 60); // OPPOSITE LANE
   scene.add(car);
   traffic.push(car);
 }
+setInterval(spawnTraffic, 2500);
 
-for (let i = -50; i > -500; i -= 40) spawnTraffic(i);
-
-// =====================
-// TRAFFIC LIGHT
-// =====================
+// ===== TRAFFIC LIGHT =====
 const lightPole = new THREE.Mesh(
   new THREE.CylinderGeometry(0.1, 0.1, 4),
-  new THREE.MeshStandardMaterial({ color: 0x222222 })
+  new THREE.MeshStandardMaterial({ color: 0x333333 })
 );
-lightPole.position.set(-5, 2, -60);
+lightPole.position.set(-5, 2, 40);
 scene.add(lightPole);
 
+const lightColors = {
+  red: new THREE.Color(0xff0000),
+  yellow: new THREE.Color(0xffff00),
+  green: new THREE.Color(0x00ff00),
+};
+
 const trafficLight = new THREE.Mesh(
-  new THREE.BoxGeometry(0.6, 1.6, 0.6),
-  new THREE.MeshStandardMaterial({ color: 0xff0000 })
+  new THREE.BoxGeometry(0.6, 1.5, 0.6),
+  new THREE.MeshStandardMaterial({ color: lightColors.green })
 );
-trafficLight.position.set(-5, 4, -60);
+trafficLight.position.set(-5, 4, 40);
 scene.add(trafficLight);
 
-let lightState = "red";
-let lightTimer = 0;
+let lightState = "green";
 
-// =====================
-// GAME STATE
-// =====================
-let gameOver = false;
+setInterval(() => {
+  if (lightState === "green") {
+    lightState = "yellow";
+    trafficLight.material.color = lightColors.yellow;
+  } else if (lightState === "yellow") {
+    lightState = "red";
+    trafficLight.material.color = lightColors.red;
+  } else {
+    lightState = "green";
+    trafficLight.material.color = lightColors.green;
+  }
+}, 4000);
 
-// =====================
-// GAME LOOP
-// =====================
+// ===== MOVEMENT =====
+let speed = 0.15;
+
 function animate() {
   requestAnimationFrame(animate);
-  if (gameOver) return;
 
-  // ===== PLAYER MOVEMENT =====
-  if (keys["w"]) speed = Math.min(speed + 0.01, maxSpeed);
-  else speed *= 0.95;
-
-  if (keys["a"]) player.position.x -= 0.08;
-  if (keys["d"]) player.position.x += 0.08;
-
-  player.position.x = THREE.MathUtils.clamp(player.position.x, -6, 0);
-  player.position.z -= speed;
-
-  camera.position.z = player.position.z + 15;
+  // PLAYER
+  player.position.z += speed;
+  camera.position.z = player.position.z - 10;
   camera.lookAt(player.position);
 
-  // ===== TRAFFIC LIGHT LOGIC =====
-  lightTimer += 0.016;
-
-  if (lightState === "red" && lightTimer > 5) {
-    lightState = "green";
-    trafficLight.material.color.set(0x00ff00);
-    lightTimer = 0;
-  } else if (lightState === "green" && lightTimer > 6) {
-    lightState = "yellow";
-    trafficLight.material.color.set(0xffff00);
-    lightTimer = 0;
-  } else if (lightState === "yellow" && lightTimer > 2) {
-    lightState = "red";
-    trafficLight.material.color.set(0xff0000);
-    lightTimer = 0;
-  }
-
-  // ===== RED LIGHT VIOLATION =====
-  if (
-    lightState === "red" &&
-    player.position.z < -55 &&
-    player.position.z > -65 &&
-    speed > 0.05
-  ) {
-    endGame("You ran a red light!");
-  }
-
-  // ===== TRAFFIC MOVEMENT =====
+  // TRAFFIC
   traffic.forEach(car => {
-    car.position.z += 0.25;
+    const distanceToLight = trafficLight.position.z - car.position.z;
 
-    if (car.position.z > player.position.z + 50) {
-      car.position.z = player.position.z - 400;
+    if (lightState === "red" && distanceToLight > -2 && distanceToLight < 8) {
+      return; // STOP AT RED
     }
 
-    // COLLISION
-    if (car.position.distanceTo(player.position) < 2.5) {
-      endGame("You crashed!");
-    }
+    car.position.z -= 0.2;
   });
 
   renderer.render(scene, camera);
 }
 
-// =====================
-// GAME OVER
-// =====================
-function endGame(reason) {
-  gameOver = true;
-  console.log(reason);
-  document.body.innerHTML += `<h1 style="position:fixed;top:40%;width:100%;text-align:center;color:red;">GAME OVER<br>${reason}</h1>`;
-}
-
 animate();
+
+// ===== RESIZE =====
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
