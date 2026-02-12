@@ -4,7 +4,7 @@
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -13,8 +13,8 @@ document.body.appendChild(renderer.domElement);
 // LIGHTING
 // =======================
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const sun = new THREE.DirectionalLight(0xffffff, 0.6);
-sun.position.set(5, 10, -5);
+const sun = new THREE.DirectionalLight(0xffffff, 0.7);
+sun.position.set(5, 12, -5);
 scene.add(sun);
 
 // =======================
@@ -28,8 +28,8 @@ window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 // CONSTANTS
 // =======================
 const ROAD_WIDTH = 12;
-const SEGMENT_LENGTH = 100;
-const LANES = [-2, 0, 2];
+const SEGMENT_LENGTH = 120;
+const LANES = [-2.5, 0, 2.5];
 
 // =======================
 // ROAD + STRIPES
@@ -46,10 +46,9 @@ function createRoadSegment(z) {
   scene.add(road);
   roadSegments.push(road);
 
-  // lane stripes
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 12; i++) {
     const stripe = new THREE.Mesh(
-      new THREE.BoxGeometry(0.15, 0.02, 4),
+      new THREE.BoxGeometry(0.2, 0.02, 5),
       new THREE.MeshStandardMaterial({ color: 0xffffff })
     );
     stripe.position.set(0, 0.06, z - SEGMENT_LENGTH / 2 + i * 10);
@@ -58,40 +57,57 @@ function createRoadSegment(z) {
   }
 }
 
-for (let i = 0; i < 6; i++) {
-  createRoadSegment(i * SEGMENT_LENGTH);
-}
+for (let i = 0; i < 6; i++) createRoadSegment(i * SEGMENT_LENGTH);
 
 // =======================
-// PLAYER
+// VEHICLES
 // =======================
-const player = new THREE.Mesh(
-  new THREE.BoxGeometry(1.8, 1, 3),
-  new THREE.MeshStandardMaterial({ color: 0xff0000 })
-);
-player.position.set(0, 0.55, 0);
-scene.add(player);
+const vehicleTypes = {
+  car:        { size: [1.8, 1, 3],  color: 0xff0000, maxSpeed: 0.38 },
+  suv:        { size: [2.1, 1.2, 3.6], color: 0x00aa00, maxSpeed: 0.34 },
+  bus:        { size: [2.4, 1.5, 6], color: 0xffff00, maxSpeed: 0.28 },
+  ambulance: { size: [2, 1.3, 4], color: 0xffffff, maxSpeed: 0.36 },
+  semi:       { size: [2.6, 1.6, 7], color: 0x5555ff, maxSpeed: 0.25 }
+};
+
+let player;
+let currentVehicle = "car";
+
+function spawnPlayer(type) {
+  if (player) scene.remove(player);
+
+  const v = vehicleTypes[type];
+  player = new THREE.Mesh(
+    new THREE.BoxGeometry(...v.size),
+    new THREE.MeshStandardMaterial({ color: v.color })
+  );
+  player.position.set(0, 0.6, 0);
+  player.userData.maxSpeed = v.maxSpeed;
+  scene.add(player);
+}
+
+spawnPlayer("car");
 
 // =======================
 // CAMERA
 // =======================
-camera.position.set(0, 6, -10);
-camera.lookAt(player.position);
+camera.position.set(0, 7, -12);
+camera.lookAt(0, 0, 0);
 
 // =======================
-// PLAYER MOVEMENT
+// PLAYER MOVEMENT (FIXED CONTROLS)
 // =======================
 let laneIndex = 1;
 let targetX = LANES[laneIndex];
 let speed = 0;
-const MAX_SPEED = 0.35;
 
 function updatePlayer() {
-  if (keys["w"]) speed = Math.min(MAX_SPEED, speed + 0.01);
+  if (keys["w"]) speed = Math.min(player.userData.maxSpeed, speed + 0.01);
   else speed = Math.max(0, speed - 0.006);
 
   if (keys["s"]) speed = Math.max(0, speed - 0.03);
 
+  // A = LEFT, D = RIGHT (FIXED)
   if (keys["a"] && laneIndex > 0) {
     laneIndex--;
     keys["a"] = false;
@@ -107,92 +123,67 @@ function updatePlayer() {
 }
 
 // =======================
-// AI TRAFFIC
+// VEHICLE SWITCH (1–5)
 // =======================
-const traffic = [];
-
-function spawnTraffic() {
-  const car = new THREE.Mesh(
-    new THREE.BoxGeometry(1.8, 1, 3),
-    new THREE.MeshStandardMaterial({ color: 0x0044ff })
-  );
-
-  const lane = LANES[Math.floor(Math.random() * LANES.length)];
-  car.position.set(lane, 0.55, player.position.z + 120);
-  car.userData.speed = 0.22;
-
-  scene.add(car);
-  traffic.push(car);
-}
-
-setInterval(spawnTraffic, 2000);
+window.addEventListener("keydown", e => {
+  const map = { "1": "car", "2": "suv", "3": "bus", "4": "ambulance", "5": "semi" };
+  if (map[e.key]) {
+    currentVehicle = map[e.key];
+    speed = 0;
+    spawnPlayer(currentVehicle);
+  }
+});
 
 // =======================
-// INTERSECTIONS + LIGHTS
+// INTERSECTIONS + VISIBLE TRAFFIC LIGHTS
 // =======================
 const intersections = [];
 
 function spawnIntersection(z) {
-  // cross road
   const cross = new THREE.Mesh(
-    new THREE.BoxGeometry(40, 0.12, 10),
+    new THREE.BoxGeometry(36, 0.12, 10),
     new THREE.MeshStandardMaterial({ color: 0x333333 })
   );
   cross.position.set(0, 0.05, z);
   scene.add(cross);
 
-  // pole
   const pole = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.15, 0.15, 4),
+    new THREE.CylinderGeometry(0.18, 0.18, 5),
     new THREE.MeshStandardMaterial({ color: 0x444444 })
   );
-  pole.position.set(5, 2, z);
+  pole.position.set(ROAD_WIDTH / 2 - 1, 2.5, z);
   scene.add(pole);
 
-  // light head
   const light = new THREE.Mesh(
-    new THREE.BoxGeometry(0.8, 1.6, 0.6),
-    new THREE.MeshStandardMaterial({ color: 0x00ff00 })
+    new THREE.BoxGeometry(0.9, 2.2, 0.6),
+    new THREE.MeshStandardMaterial({
+      color: 0x00ff00,
+      emissive: 0x00ff00
+    })
   );
-  light.position.set(5, 4, z);
+  light.position.set(ROAD_WIDTH / 2 - 1, 5.2, z);
   scene.add(light);
 
   intersections.push({
     light,
     state: "green",
     timer: 0,
-    stopZ: z - 6
+    stopZ: z - 7
   });
 }
 
 // =======================
-// COLLISION
+// LIGHT LOGIC
 // =======================
-const playerBox = new THREE.Box3();
-
-function checkCollisions() {
-  playerBox.setFromObject(player);
-
-  for (const car of traffic) {
-    const carBox = new THREE.Box3().setFromObject(car);
-    if (playerBox.intersectsBox(carBox)) {
-      alert("Game Over");
-      location.reload();
-    }
-  }
-}
-
-// =======================
-// UPDATE LIGHTS
-// =======================
-function updateIntersections(delta) {
+function updateLights(delta) {
   intersections.forEach(i => {
     i.timer += delta;
-
     if (i.timer > 5) {
       i.timer = 0;
       i.state = i.state === "green" ? "red" : "green";
-      i.light.material.color.set(i.state === "green" ? 0x00ff00 : 0xff0000);
+      const c = i.state === "green" ? 0x00ff00 : 0xff0000;
+      i.light.material.color.set(c);
+      i.light.material.emissive.set(c);
     }
 
     if (
@@ -209,7 +200,7 @@ function updateIntersections(delta) {
 // GAME LOOP
 // =======================
 let lastTime = performance.now();
-let nextIntersectionZ = 120;
+let nextIntersectionZ = 140;
 
 function animate(time) {
   requestAnimationFrame(animate);
@@ -217,29 +208,20 @@ function animate(time) {
   lastTime = time;
 
   updatePlayer();
-  updateIntersections(delta);
-  checkCollisions();
+  updateLights(delta);
 
-  // move AI traffic
-  traffic.forEach(car => {
-    car.position.z -= car.userData.speed;
-  });
+  camera.position.z = player.position.z - 12;
+  camera.lookAt(player.position);
 
-  // infinite road recycle
   roadSegments.forEach(r => {
     if (r.position.z + SEGMENT_LENGTH < player.position.z) {
       r.position.z += SEGMENT_LENGTH * roadSegments.length;
     }
   });
 
-  // camera follow
-  camera.position.z = player.position.z - 10;
-  camera.lookAt(player.position);
-
-  // spawn intersections
   if (player.position.z > nextIntersectionZ) {
     spawnIntersection(nextIntersectionZ);
-    nextIntersectionZ += 160;
+    nextIntersectionZ += 180;
   }
 
   renderer.render(scene, camera);
